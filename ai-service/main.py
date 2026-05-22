@@ -1,7 +1,5 @@
-"""
-TorchBearer AI Recommendation Service
-FastAPI + TF-IDF + Cosine Similarity
-"""
+
+#fastapi server entry point is main.py
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,13 +36,12 @@ engine = RecommendationEngine(
 )
 
 
-# ── Request / Response models ─────────────────────────────────
+# ── Request / Response models
 
 class RecommendationRequest(BaseModel):
-    """
-    Accepts either skills (alumni) or interests (students).
-    At least one must be provided.
-    """
+    
+    #Accepts either skills (alumni) or interests (students).At least one must be provided.
+    
     skills: Optional[List[str]] = None
     interests: Optional[List[str]] = None
     top_n: int = 5
@@ -66,7 +63,7 @@ class RecommendationResponse(BaseModel):
     total_spaces_analyzed: int
 
 
-# ── Routes ────────────────────────────────────────────────────
+# Routes 
 
 @app.get("/health")
 def health_check():
@@ -75,14 +72,11 @@ def health_check():
 
 @app.post("/recommend", response_model=RecommendationResponse)
 def get_recommendations(request: RecommendationRequest):
-    """
-    Returns top-N recommended spaces for a user based on their
-    skills (alumni) or interests (students) using TF-IDF + cosine similarity.
-    """
+    
     # Merge skills and interests into a single query list
     query_terms: List[str] = []
     if request.skills:
-        query_terms.extend([
+        query_terms.extend([ #combines all user preferances
             skill.strip()
             for skill in request.skills
             if skill.strip()
@@ -92,9 +86,9 @@ def get_recommendations(request: RecommendationRequest):
             interest.strip()
             for interest in request.interests
             if interest.strip()
-        ])
+        ]) #strip removes extra spaces
 
-    query_terms = list(set(query_terms))
+    query_terms = list(set(query_terms)) #avoids repeated keywords
 
     if not query_terms:
         raise HTTPException(
@@ -115,7 +109,7 @@ def get_recommendations(request: RecommendationRequest):
             detail=f"Recommendation engine error: {str(exc)}",
         )
 
-    # Sanitise results — ensure no None values slip through Pydantic validation
+    # Sanitise results — ensure no null values None values slip through Pydantic validation
     safe_results = []
     for r in results:
         safe_results.append(RecommendedSpace(

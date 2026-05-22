@@ -22,11 +22,11 @@ class RecommendationEngine:
         if not mongo_uri:
             raise ValueError("MONGO_URI environment variable is not set.")
 
-        self.client = MongoClient(mongo_uri)
-        self.db = self.client[db_name]
-        self.spaces_collection = self.db["spaces"]
+        self.client = MongoClient(mongo_uri) #creates connection to mongodb
+        self.db = self.client[db_name] #selects project database
+        self.spaces_collection = self.db["spaces"] # targets spaces collection
 
-        # Verify MongoDB connection
+        # Verify MongoDB connection or checks whether mongodb is alive
         try:
             self.client.admin.command("ping")
             print("✅ MongoDB connected successfully")
@@ -36,21 +36,12 @@ class RecommendationEngine:
                 f"❌ Cannot connect to MongoDB: {exc}"
             ) from exc
 
-    def _fetch_spaces(self) -> List[Dict[str, Any]]:
-        """
-        Fetch all spaces from MongoDB.
-
-        Expected fields:
-        - _id
-        - title
-        - description
-        - tags
-        - createdBy
-        """
+    def _fetch_spaces(self) -> List[Dict[str, Any]]: #Fetch all spaces from MongoDB. Expected fields: - _id,  - title - description- tags - createdBy
+    
 
         pipeline = [
             {
-                "$lookup": {
+                "$lookup": { #used for join operation(join spaces collection with users collection)
                     "from": "users",
                     "localField": "createdBy",
                     "foreignField": "_id",
@@ -58,7 +49,7 @@ class RecommendationEngine:
                 }
             },
             {
-                "$project": {
+                "$project": { #used to return only necessary fields
                     "_id": 1,
                     "title": 1,
                     "name": 1,
@@ -73,17 +64,12 @@ class RecommendationEngine:
         ]
 
         return list(self.spaces_collection.aggregate(pipeline))
-
+    # to convert structured space data into searchable text
     def _build_searchable_text(
         self,
         space: Dict[str, Any]
     ) -> str:
-        """
-        Build searchable text from:
-        - title
-        - description
-        - tags
-        """
+        #Build searchable text from: - title - description - tags
 
         parts = []
 
@@ -97,7 +83,7 @@ class RecommendationEngine:
         if title:
             normalized_title = title.lower()
 
-            # Weight title heavily
+            # Weight title heavily to increase the importance of title terms
             parts.extend([normalized_title] * 5)
 
         # Description
@@ -135,15 +121,6 @@ class RecommendationEngine:
         query_terms: List[str],
         top_n: int = 5,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Recommendation workflow:
-
-        1. Fetch spaces
-        2. Build searchable corpus
-        3. Vectorize with TF-IDF
-        4. Compute cosine similarity
-        5. Return top matches
-        """
 
         spaces = self._fetch_spaces()
 
@@ -177,10 +154,10 @@ class RecommendationEngine:
 
         # TF-IDF Vectorizer
         vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1, 2),
+            stop_words="english",  #remove common words like the, is , and
+            ngram_range=(1, 2), #for improving semantic matching by using two-words phrases for single words like machine learning becomes machine and learning
             min_df=1,
-            sublinear_tf=True,
+            sublinear_tf=True, #applies logarithmic scaling by preventing keyword stuffing 1+log(tf)
         )
 
         # Transform documents
@@ -192,13 +169,13 @@ class RecommendationEngine:
         space_vectors = tfidf_matrix[:-1]
         query_vector = tfidf_matrix[-1]
 
-        # Similarity calculation
+        # Similarity calculation between user query vectors and space vectors
         similarity_scores = cosine_similarity(
             query_vector,
             space_vectors
-        ).flatten()
+        ).flatten() #calculates similarity between user interests and every space
 
-        # Rank results
+        # Rank results by sorting highest similarity 1st
         ranked_indices = np.argsort(
             similarity_scores
         )[::-1]
@@ -208,7 +185,7 @@ class RecommendationEngine:
         for idx in ranked_indices[:top_n]:
             score = float(similarity_scores[idx])
 
-            # Ignore very weak matches
+            # Ignore very weak/irrelevant matches
             if score <= 0.01:
                 break
 
